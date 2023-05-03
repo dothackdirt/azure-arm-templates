@@ -1,0 +1,175 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "defaultValue": "[resourceGroup().location]",
+      "type": "String",
+      "metadata": {
+        "description": "Location for all resources."
+      }
+    },
+    "vnetName": {
+      "defaultValue": "vnet-name-001",
+      "type": "String",
+      "metadata": {
+        "description": "Name of the virtual network."
+      }
+    },
+    "vnetAddressSpace": {
+      "defaultValue": "192.168.1.0/24",
+      "type": "String",
+      "metadata": {
+        "description": "Address space for the virtual network."
+      }
+    },
+    "subnetName": {
+      "defaultValue": "snet-name-001",
+      "type": "String",
+      "metadata": {
+        "description": "Name of the subnet."
+      }
+    },
+    "subnetAddressPrefix": {
+      "defaultValue": "192.168.1.0/24",
+      "type": "String",
+      "metadata": {
+        "description": "Address prefix for the subnet."
+      }
+    },
+    "nsgName": {
+      "defaultValue": "nsg-name-001",
+      "type": "String",
+      "metadata": {
+        "description": "Name of the network security group."
+      }
+    },
+    "workspaceName": {
+      "defaultValue": "law-name-001",
+      "type": "String",
+      "metadata": {
+        "description": "Name of the Log Analytics Workspace."
+      }
+    },
+    "workspaceSku": {
+      "defaultValue": "PerGB2018",
+      "type": "String",
+      "metadata": {
+        "description": "Pricing tier of the Log Analytics Workspace."
+      }
+    },
+	"storageAccountName": {
+      "type": "string",
+	  "defaultValue": "storage-account-id",
+      "metadata": {
+        "description": "The name of the existing storage account"
+      }
+    },
+    "storageAccountResourceGroupName": {
+      "type": "string",
+	  "defaultValue": "storage-account-rg",
+      "metadata": {
+        "description": "The name of the resource group where the existing storage account is located"
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2020-11-01",
+      "name": "[parameters('vnetName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[parameters('vnetAddressSpace')]"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "[parameters('subnetName')]",
+            "properties": {
+              "addressPrefix": "[parameters('subnetAddressPrefix')]",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('nsgName'))]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2020-11-01",
+      "name": "[parameters('nsgName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "SSH-Allow",
+            "properties": {
+              "description": "Allow SSH traffic",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
+              "access": "Allow",
+              "priority": 100,
+              "direction": "Inbound"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2020-03-01-preview",
+      "name": "[parameters('workspaceName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "[parameters('workspaceSku')]"
+      },
+      "properties": {
+        "retentionInDays": 30
+      }
+    },
+      "properties": {
+        "targetResourceId": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('nsgName'))]",
+        "storageId": "[resourceId(parameters('storageAccountResourceGroupName'), 'Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+        "enabled": true,
+        "retentionPolicy": {
+          "days": 7,
+          "enabled": true
+        },
+        "format": {
+          "type": "JSON",
+          "version": 1
+        },
+        "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]"
+      }
+    },
+    {
+      "type": "Microsoft.Network/virtualNetworks/providers/diagnosticSettings",
+      "apiVersion": "2017-05-01-preview",
+      "name": "[concat(parameters('vnetName'), '/Microsoft.Insights/diagnostics')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName'))]",
+        "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]"
+      ],
+      "properties": {
+        "workspaceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName'))]",
+        "metrics": [
+          {
+            "category": "AllMetrics",
+            "enabled": true,
+            "retentionPolicy": {
+              "enabled": false,
+              "days": 0
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
